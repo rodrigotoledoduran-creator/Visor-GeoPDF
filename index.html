@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#14262B">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Visor GeoPDF">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Visor GeoPDF</title>
+<style>
+  :root { --fondo: #14262B; --azul: #1F6FA8; --azul-oscuro: #17557F; --tinta: #14262B; --suave: #41565B; --linea: #C9D6D4; --papel: #F0F4F3; --rojo: #C0392B; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overscroll-behavior: none; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: var(--tinta); background: var(--papel); -webkit-text-size-adjust: 100%; }
+  button { font: inherit; cursor: pointer; }
+  .pantalla { position: fixed; inset: 0; display: flex; flex-direction: column; }
+  .pantalla[hidden] { display: none; }
+  .barra { background: var(--fondo); color: #fff; display: flex; align-items: center; gap: 10px; padding: calc(env(safe-area-inset-top) + 10px) 14px 10px; min-height: 56px; }
+  .barra img { width: 34px; height: 34px; border-radius: 6px; background: #fff; object-fit: contain; }
+  .barra h1 { font-size: 18px; margin: 0; flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .btn { border: 0; border-radius: 8px; padding: 12px 18px; font-weight: 600; font-size: 16px; min-height: 48px; }
+  .primario { background: var(--azul); color: #fff; }
+  .primario:active { background: var(--azul-oscuro); }
+  .claro { background: #fff; color: var(--azul); border: 1px solid var(--azul); }
+  .peligro { background: #fff; color: var(--rojo); border: 1px solid var(--rojo); }
+  .barra .btn { background: rgba(255,255,255,.14); color: #fff; padding: 8px 14px; min-height: 40px; }
+  .cuerpo { flex: 1; overflow: auto; padding: 16px 16px calc(env(safe-area-inset-bottom) + 24px); max-width: 720px; width: 100%; margin: 0 auto; }
+  .tarjeta { background: #fff; border: 1px solid var(--linea); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+  .tarjeta h2 { margin: 0 0 4px; font-size: 17px; }
+  .suave { color: var(--suave); font-size: 14px; margin: 0; }
+  .fila { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+  .fila .btn { flex: 1; min-width: 120px; }
+  .aviso { background: #FFF6E0; border: 1px solid #E0A030; color: #6B4A00; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 15px; }
+  #visor { background: #1d2b2f; touch-action: none; position: relative; flex: 1; overflow: hidden; }
+  #capa { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+  #capa canvas { display: block; background: #fff; }
+  #yo { position: absolute; width: 0; height: 0; pointer-events: none; display: none; }
+  #yo .precision { position: absolute; border-radius: 50%; background: rgba(31,111,168,.18); border: 1px solid rgba(31,111,168,.6); transform: translate(-50%, -50%); }
+  #yo .punto { position: absolute; width: 0; height: 0; }
+  #yo .punto i { position: absolute; left: -11px; top: -11px; width: 22px; height: 22px; border-radius: 50%; background: #2B7DE9; border: 3px solid #fff; box-shadow: 0 0 6px rgba(0,0,0,.55); }
+  .controles { position: absolute; right: 12px; bottom: calc(env(safe-area-inset-bottom) + 70px); display: flex; flex-direction: column; gap: 10px; }
+  .controles button { width: 52px; height: 52px; border-radius: 50%; border: 0; background: #fff; color: var(--tinta); font-size: 26px; font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+  .controles button.activo { background: var(--azul); color: #fff; }
+  #estado { position: absolute; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom) + 12px); background: rgba(20,38,43,.88); color: #fff; padding: 10px 14px; border-radius: 10px; font-size: 15px; text-align: center; }
+  #cargando { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(20,38,43,.7); color: #fff; font-size: 18px; text-align: center; padding: 20px; }
+  #cargando[hidden] { display: none; }
+  .lista-mapas .tarjeta { display: flex; flex-direction: column; }
+  details summary { cursor: pointer; font-weight: 600; }
+  details p { margin: 8px 0 0; font-size: 15px; color: var(--suave); }
+  input[type=file] { display: none; }
+</style>
+</head>
+<body>
+
+<section class="pantalla" id="p-lista">
+  <div class="barra"><img src="icon-192.png" alt=""><h1>Visor GeoPDF</h1></div>
+  <div class="cuerpo">
+    <div class="aviso" id="aviso-seguro" hidden>Esta página no está en una conexión segura (HTTPS), así que el teléfono no entregará tu ubicación. Ábrela desde la dirección web segura de la aplicación.</div>
+    <div class="tarjeta">
+      <h2>Agregar un plano</h2>
+      <p class="suave">Elige el archivo GeoPDF que te enviaron. Queda guardado en el teléfono y después se abre sin internet.</p>
+      <div class="fila"><label class="btn primario" for="archivo" style="text-align:center">Elegir GeoPDF</label></div>
+      <input type="file" id="archivo" accept="application/pdf,.pdf">
+    </div>
+    <div id="msg-lista"></div>
+    <div class="lista-mapas" id="lista"></div>
+    <div class="tarjeta">
+      <details>
+        <summary>Cómo usarlo</summary>
+        <p>1) Elige el GeoPDF. 2) Ábrelo y acepta el permiso de ubicación. 3) Camina: el punto azul muestra dónde estás; el círculo claro es la precisión del GPS. Funciona sin internet, solo con el GPS del teléfono.</p>
+        <p>Para tenerla como app: en iPhone, botón Compartir y «Agregar a pantalla de inicio»; en Android, menú del navegador y «Instalar aplicación».</p>
+        <p>La ubicación es solo una referencia: el GPS del teléfono puede tener un error de varios metros y no reemplaza los deslindes ni el plano oficial.</p>
+      </details>
+    </div>
+    <p class="suave" style="text-align:center;margin-top:16px">Topografía Integral, Servicios Topográficos e Ingeniería SpA</p>
+  </div>
+</section>
+
+<section class="pantalla" id="p-mapa" hidden>
+  <div class="barra"><button class="btn" id="volver" aria-label="Volver a la lista">‹ Planos</button><h1 id="titulo-mapa"></h1></div>
+  <div id="visor">
+    <div id="capa"><canvas id="lienzo"></canvas><div id="yo"><div class="precision"></div><div class="punto"><i></i></div></div></div>
+    <div class="controles">
+      <button id="b-mas" aria-label="Acercar">+</button>
+      <button id="b-menos" aria-label="Alejar">−</button>
+      <button id="b-centrar" aria-label="Centrar en mi ubicación" title="Centrar en mi ubicación">◎</button>
+    </div>
+    <div id="estado">Buscando tu ubicación…</div>
+    <div id="cargando">Cargando el plano…</div>
+  </div>
+</section>
+
+<script src="lib/pdf.min.js"></script>
+<script src="lib/pdf-lib.min.js"></script>
+<script>
+'use strict';
+/* =====================================================================
+   VISOR GEOPDF: muestra la ubicación del usuario sobre un plano GeoPDF.
+   Lógica pura (probada aparte) entre las marcas <logica-visor>.
+   ===================================================================== */
+// <logica-visor>
+/* Ajusta una transformación afín  (lon, lat) -> (u, v)  con los puntos GPTS/LPTS del GeoPDF.
+   Se trabaja en metros locales para que el cálculo sea estable. */
+function ajustarGeoPDF(gpts, lpts) {
+  const n = Math.floor(Math.min(gpts.length, lpts.length) / 2);
+  if (n < 3) return { error: 'El PDF no trae suficientes puntos de georreferencia.' };
+  let lat0 = 0, lon0 = 0;
+  for (let i = 0; i < n; i++) { lat0 += gpts[2 * i]; lon0 += gpts[2 * i + 1]; }
+  lat0 /= n; lon0 /= n;
+  const kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110574;
+  const pts = [];
+  for (let i = 0; i < n; i++) pts.push({ X: (gpts[2 * i + 1] - lon0) * kx, Y: (gpts[2 * i] - lat0) * ky, u: lpts[2 * i], v: lpts[2 * i + 1] });
+  const mX = pts.reduce((s, p) => s + p.X, 0) / n, mY = pts.reduce((s, p) => s + p.Y, 0) / n;
+  const mu = pts.reduce((s, p) => s + p.u, 0) / n, mv = pts.reduce((s, p) => s + p.v, 0) / n;
+  let Sxx = 0, Sxy = 0, Syy = 0, Sxu = 0, Syu = 0, Sxv = 0, Syv = 0;
+  pts.forEach(p => { const x = p.X - mX, y = p.Y - mY, u = p.u - mu, v = p.v - mv; Sxx += x * x; Sxy += x * y; Syy += y * y; Sxu += x * u; Syu += y * u; Sxv += x * v; Syv += y * v; });
+  const det = Sxx * Syy - Sxy * Sxy;
+  if (!(Math.abs(det) > 1e-9 * Sxx * Syy) || !(Sxx > 0)) return { error: 'Los puntos de georreferencia del PDF están en una línea y no definen un plano.' };
+  const a = (Sxu * Syy - Syu * Sxy) / det, b = (Syu * Sxx - Sxu * Sxy) / det;
+  const d = (Sxv * Syy - Syv * Sxy) / det, e = (Syv * Sxx - Sxv * Sxy) / det;
+  const c = mu - a * mX - b * mY, f = mv - d * mX - e * mY;
+  return { a, b, c, d, e, f, lat0, lon0, kx, ky };
+}
+/* Posición (u, v) en la unidad del plano, 0..1 dentro del recuadro, a partir de latitud y longitud. */
+function latLonAUV(T, lat, lon) {
+  const X = (lon - T.lon0) * T.kx, Y = (lat - T.lat0) * T.ky;
+  return { u: T.a * X + T.b * Y + T.c, v: T.d * X + T.e * Y + T.f };
+}
+/* u, v (0..1) a coordenadas PDF según el BBox del viewport. */
+const uvAPdf = (bbox, u, v) => ({ x: bbox[0] + u * (bbox[2] - bbox[0]), y: bbox[1] + v * (bbox[3] - bbox[1]) });
+// </logica-visor>
+
+/* ---------- Lectura de la georreferencia del PDF (ISO 32000: /VP con medida /GEO) ---------- */
+function leerGeoreferencia(doc) {
+  const { PDFName, PDFArray, PDFDict, PDFNumber } = PDFLib;
+  const nums = (arr) => { const out = []; for (let i = 0; i < arr.size(); i++) { const x = arr.lookup(i); out.push(x instanceof PDFNumber ? x.asNumber() : NaN); } return out; };
+  const paginas = doc.getPages();
+  let hayLGI = false;
+  for (let i = 0; i < paginas.length; i++) {
+    const nodo = paginas[i].node;
+    if (nodo.lookupMaybe(PDFName.of('LGIDict'), PDFArray, PDFDict)) hayLGI = true;
+    const vps = nodo.lookupMaybe(PDFName.of('VP'), PDFArray);
+    if (!vps) continue;
+    for (let k = 0; k < vps.size(); k++) {
+      const vp = vps.lookup(k, PDFDict);
+      const bboxA = vp.lookupMaybe(PDFName.of('BBox'), PDFArray);
+      const medida = vp.lookupMaybe(PDFName.of('Measure'), PDFDict);
+      if (!bboxA || !medida) continue;
+      const sub = medida.lookupMaybe(PDFName.of('Subtype'), PDFName);
+      if (!sub || sub.decodeText() !== 'GEO') continue;
+      const gp = medida.lookupMaybe(PDFName.of('GPTS'), PDFArray), lp = medida.lookupMaybe(PDFName.of('LPTS'), PDFArray);
+      if (!gp || !lp) continue;
+      const bbox = nums(bboxA);
+      const g = nums(gp), l = nums(lp);
+      if (bbox.length !== 4 || [...bbox, ...g, ...l].some(x => !isFinite(x))) continue;
+      const T = ajustarGeoPDF(g, l);
+      if (T.error) return { error: T.error };
+      return { pagina: i, bbox, T };
+    }
+  }
+  return { error: hayLGI ? 'Este PDF usa un formato de georreferencia más antiguo (TerraGo) que este visor todavía no lee. Pide el GeoPDF generado con el Cuaderno Topográfico.' : 'Este PDF no está georreferenciado: no trae coordenadas para ubicarte. Pide el GeoPDF a quien te lo envió.' };
+}
+
+/* ---------- Almacenamiento de planos en el teléfono (IndexedDB) ---------- */
+const BD = {
+  abrir() {
+    return new Promise((ok, mal) => {
+      const r = indexedDB.open('visor-geopdf', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('planos', { keyPath: 'id' });
+      r.onsuccess = () => ok(r.result); r.onerror = () => mal(r.error);
+    });
+  },
+  async hacer(modo, fn) {
+    const db = await this.abrir();
+    return new Promise((ok, mal) => {
+      const tx = db.transaction('planos', modo), st = tx.objectStore('planos');
+      const res = fn(st);
+      tx.oncomplete = () => ok(res && res.result !== undefined ? res.result : undefined); tx.onerror = () => mal(tx.error); tx.onabort = () => mal(tx.error);
+    });
+  },
+  todos() { return this.hacer('readonly', st => st.getAll()); },
+  uno(id) { return this.hacer('readonly', st => st.get(id)); },
+  guardar(o) { return this.hacer('readwrite', st => st.put(o)); },
+  borrar(id) { return this.hacer('readwrite', st => st.delete(id)); }
+};
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let G = null; // plano abierto: { vp, bbox, T, ancho, alto }
+let vista = { s: 1, tx: 0, ty: 0, fit: 1 };
+let vigilancia = null, ultima = null, siguiendo = false;
+
+/* ---------- Lista de planos ---------- */
+function fmtTam(b) { return b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB'; }
+async function dibujarLista() {
+  let planos = [];
+  try { planos = await BD.todos(); } catch (e) { $('#msg-lista').innerHTML = '<div class="aviso">Este navegador no permite guardar planos en el teléfono. Puedes abrirlos igual, pero tendrás que elegirlos cada vez.</div>'; }
+  planos.sort((a, b) => b.fecha - a.fecha);
+  $('#lista').innerHTML = planos.length ? planos.map(p => `<div class="tarjeta"><h2>${esc(p.nombre)}</h2><p class="suave">${fmtTam(p.blob.size)} · agregado el ${new Date(p.fecha).toLocaleDateString('es-CL')}</p>
+    <div class="fila"><button class="btn primario" data-abrir="${esc(p.id)}">Abrir</button><button class="btn peligro" data-borrar="${esc(p.id)}">Eliminar</button></div></div>`).join('')
+    : '<p class="suave" style="text-align:center">Todavía no hay planos guardados.</p>';
+}
+$('#lista').addEventListener('click', async e => {
+  const a = e.target.closest('[data-abrir]'), b = e.target.closest('[data-borrar]');
+  if (a) { const p = await BD.uno(a.dataset.abrir); if (p) abrirPlano(p.blob, p.nombre); }
+  if (b && confirm('¿Eliminar este plano del teléfono?')) { await BD.borrar(b.dataset.borrar); dibujarLista(); }
+});
+$('#archivo').addEventListener('change', async e => {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  $('#msg-lista').innerHTML = '<div class="tarjeta"><p class="suave">Revisando el plano…</p></div>';
+  try {
+    const bytes = new Uint8Array(await f.arrayBuffer());
+    const doc = await PDFLib.PDFDocument.load(bytes, { updateMetadata: false });
+    const geo = leerGeoreferencia(doc);
+    if (geo.error) { $('#msg-lista').innerHTML = `<div class="aviso">${esc(geo.error)}</div>`; return; }
+    const nombre = f.name.replace(/\.pdf$/i, '');
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    try { await BD.guardar({ id: nombre + '|' + f.size, nombre, blob, fecha: Date.now() }); } catch (err) {}
+    $('#msg-lista').innerHTML = '';
+    await dibujarLista();
+    abrirPlano(blob, nombre);
+  } catch (err) {
+    $('#msg-lista').innerHTML = `<div class="aviso">No se pudo abrir el PDF (${esc(err && err.message ? err.message : 'archivo no válido')}). Si tiene contraseña, hay que quitársela primero.</div>`;
+  }
+});
+
+/* ---------- Mapa ---------- */
+function aplicarVista() {
+  $('#capa').style.transform = `translate(${vista.tx}px, ${vista.ty}px) scale(${vista.s})`;
+  const yo = $('#yo'); yo.style.setProperty('--inv', String(1 / vista.s));
+  const punto = yo.querySelector('.punto'); punto.style.transform = `scale(${1 / vista.s})`;
+}
+function ajustarAlVisor() {
+  const v = $('#visor'), W = v.clientWidth, H = v.clientHeight;
+  vista.s = Math.min(W / G.ancho, H / G.alto); vista.fit = vista.s;
+  vista.tx = (W - G.ancho * vista.s) / 2; vista.ty = (H - G.alto * vista.s) / 2; aplicarVista();
+}
+function zoomEn(cx, cy, factor) {
+  const s2 = Math.min(Math.max(vista.s * factor, vista.fit * 0.8), vista.fit * 40);
+  const k = s2 / vista.s;
+  vista.tx = cx - (cx - vista.tx) * k; vista.ty = cy - (cy - vista.ty) * k; vista.s = s2; aplicarVista();
+}
+/* gestos: un dedo arrastra, dos dedos acercan, rueda del ratón en computador */
+(function () {
+  const v = $('#visor'), ptr = new Map();
+  let d0 = 0, s0 = 1, m0 = null;
+  v.addEventListener('pointerdown', e => { if (e.target.closest('.controles')) return; v.setPointerCapture(e.pointerId); ptr.set(e.pointerId, { x: e.clientX, y: e.clientY }); siguiendo = false; marcarSeguir(); if (ptr.size === 2) { const [a, b] = [...ptr.values()]; d0 = Math.hypot(a.x - b.x, a.y - b.y); s0 = vista.s; m0 = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; } });
+  v.addEventListener('pointermove', e => {
+    if (!ptr.has(e.pointerId)) return;
+    const p = ptr.get(e.pointerId), dx = e.clientX - p.x, dy = e.clientY - p.y;
+    p.x = e.clientX; p.y = e.clientY;
+    if (ptr.size === 1) { vista.tx += dx; vista.ty += dy; aplicarVista(); }
+    else if (ptr.size === 2 && d0 > 0) {
+      const [a, b] = [...ptr.values()], d = Math.hypot(a.x - b.x, a.y - b.y), r = v.getBoundingClientRect();
+      zoomEn((a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top, (s0 * d / d0) / vista.s);
+    }
+  });
+  const fin = e => { ptr.delete(e.pointerId); d0 = 0; };
+  v.addEventListener('pointerup', fin); v.addEventListener('pointercancel', fin);
+  v.addEventListener('wheel', e => { e.preventDefault(); const r = v.getBoundingClientRect(); zoomEn(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.2 : 1 / 1.2); }, { passive: false });
+})();
+function marcarSeguir() { $('#b-centrar').classList.toggle('activo', siguiendo); }
+
+async function abrirPlano(blob, nombre) {
+  $('#p-lista').hidden = true; $('#p-mapa').hidden = false;
+  $('#titulo-mapa').textContent = nombre; $('#cargando').hidden = false; $('#cargando').textContent = 'Cargando el plano…';
+  $('#estado').textContent = 'Buscando tu ubicación…'; $('#yo').style.display = 'none'; ultima = null; G = null;
+  try {
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const doc = await PDFLib.PDFDocument.load(bytes, { updateMetadata: false });
+    const geo = leerGeoreferencia(doc);
+    if (geo.error) throw new Error(geo.error);
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
+    const pdf = await pdfjsLib.getDocument({ data: bytes.slice() }).promise;
+    const pag = await pdf.getPage(geo.pagina + 1);
+    const base = pag.getViewport({ scale: 1 });
+    const maxLado = 4096, k = Math.min(maxLado / Math.max(base.width, base.height), 4);
+    const vp = pag.getViewport({ scale: k });
+    const c = $('#lienzo'); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+    await pag.render({ canvasContext: ctx, viewport: vp }).promise;
+    G = { vp, bbox: geo.bbox, T: geo.T, ancho: c.width, alto: c.height };
+    $('#yo').style.left = '0'; $('#yo').style.top = '0';
+    ajustarAlVisor(); $('#cargando').hidden = true;
+    empezarGPS();
+  } catch (e) {
+    $('#cargando').hidden = false; $('#cargando').textContent = 'No se pudo abrir el plano: ' + (e && e.message ? e.message : 'error desconocido');
+  }
+}
+
+/* posición de un punto (lat, lon) en píxeles del lienzo */
+function aLienzo(lat, lon) {
+  const { u, v } = latLonAUV(G.T, lat, lon), p = uvAPdf(G.bbox, u, v);
+  const [x, y] = G.vp.convertToViewportPoint(p.x, p.y);
+  return { x, y, u, v };
+}
+function mostrarPosicion(pos) {
+  ultima = pos;
+  const { latitude: lat, longitude: lon, accuracy } = pos.coords;
+  const q = aLienzo(lat, lon);
+  const dentro = q.u >= 0 && q.u <= 1 && q.v >= 0 && q.v <= 1;
+  const yo = $('#yo');
+  if (!dentro) { yo.style.display = 'none'; $('#estado').textContent = 'Estás fuera del plano (precisión ±' + Math.round(accuracy) + ' m).'; return; }
+  const este = aLienzo(lat, lon + (accuracy / (G.T.kx)));
+  const radio = Math.hypot(este.x - q.x, este.y - q.y);
+  yo.style.display = 'block'; yo.style.left = q.x + 'px'; yo.style.top = q.y + 'px';
+  const pr = yo.querySelector('.precision'); pr.style.width = pr.style.height = (radio * 2) + 'px';
+  aplicarVista();
+  $('#estado').textContent = 'Precisión del GPS: ±' + Math.round(accuracy) + ' m';
+  if (siguiendo) centrarEnYo(false);
+}
+function centrarEnYo(cambiarZoom) {
+  if (!ultima || !G) return;
+  const q = aLienzo(ultima.coords.latitude, ultima.coords.longitude), v = $('#visor');
+  if (cambiarZoom && vista.s < vista.fit * 3) vista.s = vista.fit * 3;
+  vista.tx = v.clientWidth / 2 - q.x * vista.s; vista.ty = v.clientHeight / 2 - q.y * vista.s; aplicarVista();
+}
+function empezarGPS() {
+  detenerGPS();
+  if (!('geolocation' in navigator)) { $('#estado').textContent = 'Este dispositivo no tiene GPS disponible.'; return; }
+  vigilancia = navigator.geolocation.watchPosition(mostrarPosicion, err => {
+    $('#estado').textContent = err.code === 1 ? 'Sin permiso de ubicación. Actívalo en los ajustes del teléfono para este sitio y vuelve a abrir el plano.'
+      : err.code === 3 ? 'El GPS tarda en responder. Sal a un lugar abierto…' : 'No se pudo obtener tu ubicación.';
+  }, { enableHighAccuracy: true, maximumAge: 1000, timeout: 30000 });
+}
+function detenerGPS() { if (vigilancia !== null) { navigator.geolocation.clearWatch(vigilancia); vigilancia = null; } }
+
+$('#b-mas').addEventListener('click', () => { const v = $('#visor'); zoomEn(v.clientWidth / 2, v.clientHeight / 2, 1.5); });
+$('#b-menos').addEventListener('click', () => { const v = $('#visor'); zoomEn(v.clientWidth / 2, v.clientHeight / 2, 1 / 1.5); });
+$('#b-centrar').addEventListener('click', () => { if (!ultima) { $('#estado').textContent = 'Todavía no hay ubicación. Revisa que el GPS esté activo.'; return; } siguiendo = true; marcarSeguir(); centrarEnYo(true); });
+$('#volver').addEventListener('click', () => { detenerGPS(); siguiendo = false; marcarSeguir(); $('#p-mapa').hidden = true; $('#p-lista').hidden = false; G = null; });
+window.addEventListener('resize', () => { if (G) ajustarAlVisor(); });
+
+if (!window.isSecureContext) $('#aviso-seguro').hidden = false;
+if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('sw.js').catch(() => {});
+dibujarLista();
+</script>
+</body>
+</html>

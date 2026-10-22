@@ -1,0 +1,16 @@
+{
+  "name": "Visor GeoPDF — Topografía Integral",
+  "short_name": "Visor GeoPDF",
+  "description": "Muestra tu ubicación sobre un plano GeoPDF, sin internet.",
+  "lang": "es-CL",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#14262B",
+  "theme_color": "#14262B",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
